@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { Pool } from "mysql2/promise";
 
-import { dbPool } from "./utils/db";
+import { dbPool } from "./db";
 
 export const availableQuests = async (req: Request, res: Response) => {
   const conn: Pool | null = dbPool();
