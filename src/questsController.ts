@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
+import { Pool } from "mysql2/promise";
 
-import { initResponse, finishResponse } from "./utils/connect";
+import { dbPool } from "./utils/db";
 
 export const availableQuests = async (req: Request, res: Response) => {
-  const { httpCode, response, conn } = await initResponse();
+  const conn: Pool | null = dbPool();
 
   if (conn !== null) {
     const questItemIdsQuery = "SELECT id FROM quest_items";
@@ -23,23 +24,48 @@ export const availableQuests = async (req: Request, res: Response) => {
     const input = req?.body?.finished_quest_ids ? [0].concat(req.body.finished_quest_ids) : [0];
     const allowedRequirements = requiredPerId.filter((r) => r.requirementIds.every(id => input.includes(id))).map((r) => r.id);
 
-    const questItemsQuery = "SELECT qi.id, qi.name, qt.name AS quest_type, mt.name AS map_name, ma.name AS area_name, mp.name AS point_name, p.name AS provider_name, h.name AS house_name, qi.required_level FROM quest_items qi LEFT JOIN providers p ON p.id = qi.provider_id LEFT JOIN map_points mp ON mp.id = qi.map_point_id LEFT JOIN map_areas ma ON ma.id = mp.map_area_id LEFT JOIN map_tabs mt ON mt.id = ma.map_tab_id LEFT JOIN houses h ON h.id = qi.required_house_id LEFT JOIN quest_types qt ON qt.id = qi.quest_type_id WHERE qi.id IN (?) OR qi.id IN (?)";
+    const questItemsQuery = "SELECT qi.id, qi.name, qt.id AS quest_type_id, qt.name AS quest_type_name, mt.id AS map_id, mt.name AS map_name, ma.id AS area_id, ma.name AS area_name, mp.id AS point_id, mp.name AS point_name, p.id AS provider_id, p.name AS provider_name, p.is_person AS provider_is_person, h.id AS house_id, h.name AS house_name, qi.required_level FROM quest_items qi LEFT JOIN providers p ON p.id = qi.provider_id LEFT JOIN map_points mp ON mp.id = qi.map_point_id LEFT JOIN map_areas ma ON ma.id = mp.map_area_id LEFT JOIN map_tabs mt ON mt.id = ma.map_tab_id LEFT JOIN houses h ON h.id = qi.required_house_id LEFT JOIN quest_types qt ON qt.id = qi.quest_type_id WHERE qi.id IN (?) OR qi.id IN (?)";
     const questItems = (await conn.query(questItemsQuery, [allowedRequirements, input]))[0] as any[];
     
     const requiredQuery = "SELECT qi.name FROM quest_items qi LEFT JOIN requirements r ON r.required_quest_item_id = qi.id WHERE r.quest_item_id = ?";
 
-    response.data = await Promise.all(questItems.map(async (item) => {
+    const finalRes = await Promise.all(questItems.map(async (item) => {
       const requiredQuestItems = (await conn.query(requiredQuery, [item.id]))[0] as any[];
 
       return {
-        ...item,
-        is_done: input.includes(item.id),
-        level_cleared: (req.body?.current_level || 1) >= (item.required_level || 1),
-        opened_by: requiredQuestItems.map((item) => item.name)
+        id: item.id,
+        name: item.name,
+        type: {
+          id: item.quest_type_id,
+          name: item.quest_type_name
+        },
+        map: {
+          id: item.map_id,
+          name: item.map_name
+        },
+        area: {
+          id: item.area_id,
+          name: item.area_name
+        },
+        point: {
+          id: item.point_id,
+          name: item.point_name
+        },
+        provider: {
+          id: item.provider_id,
+          name: item.provider_name,
+          type: item.provider_is_person ? "Person" : "Item or Place"
+        },
+        house: {
+          id: item.house_id,
+          name: item.house_name
+        },
+        isDone: input.includes(item.id),
+        levelCleared: (req.body?.current_level || 1) >= (item.required_level || 1),
+        openedBy: requiredQuestItems.map((item) => item.name)
       }
     }));
 
+    res.json(finalRes);
   }
-
-  finishResponse(res, httpCode, response);
 };
