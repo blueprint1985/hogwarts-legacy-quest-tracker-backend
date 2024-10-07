@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Pool } from "mysql2/promise";
 
 import { dbPool } from "./db";
+import { clean } from "./utils";
 
 export const availableQuests = async (req: Request, res: Response) => {
   const conn: Pool | null = dbPool();
@@ -21,6 +22,14 @@ export const availableQuests = async (req: Request, res: Response) => {
       };
     }));
 
+    const finishedIds = req?.body?.finished_quest_ids || [0];
+    if (!finishedIds.includes(0)) {
+      finishedIds.push(0);
+    }
+    const cleaned = await clean(conn, finishedIds);
+    console.log(cleaned);
+
+    //const input = await clean(conn, finishedIds);
     const input = req?.body?.finished_quest_ids ? [0].concat(req.body.finished_quest_ids) : [0];
     const allowedRequirements = requiredPerId.filter((r) => r.requirementIds.every(id => input.includes(id))).map((r) => r.id);
 
@@ -30,6 +39,10 @@ export const availableQuests = async (req: Request, res: Response) => {
     const requiredQuery = "SELECT qi.name FROM quest_items qi LEFT JOIN requirements r ON r.required_quest_item_id = qi.id WHERE r.quest_item_id = ?";
 
     const finalRes = await Promise.all(questItems.map(async (item) => {
+      if (item.house_id && req.body?.current_house !== item.house_id) {
+        return null;
+      }
+
       const requiredQuestItems = (await conn.query(requiredQuery, [item.id]))[0] as any[];
 
       return {
@@ -66,6 +79,6 @@ export const availableQuests = async (req: Request, res: Response) => {
       }
     }));
 
-    res.json(finalRes);
+    res.json(finalRes.filter(item => item !== null));
   }
 };
