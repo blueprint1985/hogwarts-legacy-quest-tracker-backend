@@ -26,11 +26,8 @@ export const availableQuests = async (req: Request, res: Response) => {
     if (!finishedIds.includes(0)) {
       finishedIds.push(0);
     }
-    const cleaned = await clean(conn, finishedIds);
-    console.log(cleaned);
 
-    //const input = await clean(conn, finishedIds);
-    const input = req?.body?.finished_quest_ids ? [0].concat(req.body.finished_quest_ids) : [0];
+    const input = await clean(conn, finishedIds);
     const allowedRequirements = requiredPerId.filter((r) => r.requirementIds.every(id => input.includes(id))).map((r) => r.id);
 
     const questItemsQuery = "SELECT qi.id, qi.name, qt.id AS quest_type_id, qt.name AS quest_type_name, mt.id AS map_id, mt.name AS map_name, ma.id AS area_id, ma.name AS area_name, mp.id AS point_id, mp.name AS point_name, p.id AS provider_id, p.name AS provider_name, p.is_person AS provider_is_person, h.id AS house_id, h.name AS house_name, qi.required_level FROM quest_items qi LEFT JOIN providers p ON p.id = qi.provider_id LEFT JOIN map_points mp ON mp.id = qi.map_point_id LEFT JOIN map_areas ma ON ma.id = mp.map_area_id LEFT JOIN map_tabs mt ON mt.id = ma.map_tab_id LEFT JOIN houses h ON h.id = qi.required_house_id LEFT JOIN quest_types qt ON qt.id = qi.quest_type_id WHERE qi.id IN (?) OR qi.id IN (?)";
@@ -67,12 +64,13 @@ export const availableQuests = async (req: Request, res: Response) => {
         provider: {
           id: item.provider_id,
           name: item.provider_name,
-          type: item.provider_is_person ? "Person" : "Item or Place"
+          type: item.provider_name ? (item.provider_is_person ? "Person" : "Item or Place") : null
         },
         house: {
           id: item.house_id,
           name: item.house_name
         },
+        recommendedLevel: item.required_level || null,
         isDone: input.includes(item.id),
         levelCleared: (req.body?.current_level || 1) >= (item.required_level || 1),
         openedBy: requiredQuestItems.map((item) => item.name)

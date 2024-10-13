@@ -2,6 +2,7 @@ import { Pool } from "mysql2/promise";
 
 export const clean = async (conn: Pool, list: number[]): Promise<number[]> => {
   const acceptable: number[] = [];
+  let allAccepted = true;
 
   for (let c = 0; c < list.length; c++) {
     const item = list[c];
@@ -11,11 +12,13 @@ export const clean = async (conn: Pool, list: number[]): Promise<number[]> => {
 
     if (requiredIds.every(i => list.includes(i))) {
       acceptable.push(item);
+    } else {
+      allAccepted = false;
     }
     
   }
 
-  if (list.length === acceptable.length) {
+  if (allAccepted) {
     return acceptable;
   } else {
     return await clean(conn, acceptable);
